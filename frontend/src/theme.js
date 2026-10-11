@@ -1,4 +1,4 @@
-export const THEME_STORAGE_KEY = 'tmux-webui.theme';
+export const THEME_STORAGE_KEY = 'workbench.theme';
 
 const THEME_SETTINGS = ['system', 'light', 'dark'];
 const THEME_SETTING_SET = new Set(THEME_SETTINGS);
@@ -20,9 +20,9 @@ export function resolveTheme(setting, prefersDark) {
 
 export function readThemeSetting(storage = globalThis.localStorage) {
   try {
-    return normalizeThemeSetting(storage.getItem(THEME_STORAGE_KEY));
+    return normalizeThemeSetting(storage.getItem(THEME_STORAGE_KEY) ?? 'dark');
   } catch {
-    return 'system';
+    return 'dark';
   }
 }
 

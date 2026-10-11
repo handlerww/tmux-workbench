@@ -1,19 +1,22 @@
 import { defineConfig } from 'vite';
 
+const backend = process.env.WORKBENCH_BACKEND ?? 'http://127.0.0.1:7690';
+const wsBackend = backend.replace(/^http:/, 'ws:').replace(/^https:/, 'wss:');
+
 export default defineConfig({
   server: {
-    port: 5173,
+    port: 5174,
     proxy: {
-      '/api': 'http://127.0.0.1:7681',
+      '/api': backend,
       '/ws': {
-        target: 'ws://127.0.0.1:7681',
+        target: wsBackend,
         ws: true,
       },
     },
   },
   build: {
+    target: 'es2022',
     outDir: '../web/dist',
     emptyOutDir: true,
   },
 });
-

@@ -1,0 +1,38 @@
+async page => {
+ const base='http://127.0.0.1:17690',checks=[],errors=[];const assert=(ok,message)=>{if(!ok)throw new Error(message);checks.push(message);};page.on('pageerror',e=>errors.push(e.message));
+ await page.setViewportSize({width:1440,height:900});await page.goto(base);await page.evaluate(()=>localStorage.clear());await page.reload();
+ const alpha=()=>page.locator('.session-card').filter({hasText:'workbench-alpha'}),beta=()=>page.locator('.session-card').filter({hasText:'workbench-beta'});await alpha().click();
+ const panel=()=>page.locator('.editor-panel:not([hidden])');await panel().locator('.connection-dot[data-state="connected"]').waitFor();
+ const measure=async()=>await panel().evaluate(n=>Object.fromEntries(['editor-toolbar','reader-composer','reader-view'].map(c=>[c,n.querySelector('.'+c).getBoundingClientRect().height])));
+ const desktop=await measure();assert(desktop['editor-toolbar']<=60&&desktop['reader-composer']<=90,'Desktop header and composer leave more vertical room for output');
+ assert(await panel().locator('.active-path').getAttribute('title')==='/tmp/workbench-e2e/project'&&await panel().locator('.session-context .connection-line[role="status"]').count()===1,'Compact path preserves its full tooltip and connection status');
+ assert(await panel().locator('.composer-row .reader-input').count()===1&&await panel().locator('.composer-row .reader-shortcuts button').count()===3,'Input, terminal keys and send share one composer card');
+ assert(await panel().locator('.reader-input').evaluate(n=>document.getElementById(n.getAttribute('aria-describedby'))?.textContent.includes('Shift+Enter')),'Input announces the multiline keyboard hint');
+ assert(!await page.evaluate(()=>document.activeElement?.matches('input,textarea')),'Opening a session keeps input unfocused');
+ const input=()=>panel().getByRole('textbox',{name:'Session input',exact:true});await input().fill('DRAFT_LAYOUT');await input().press('Shift+Enter');
+ assert(await input().inputValue()==='DRAFT_LAYOUT\n','Shift+Enter inserts a newline without submitting');
+ await input().evaluate(n=>n.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',isComposing:true,bubbles:true,cancelable:true})));await page.waitForTimeout(100);
+ assert(await input().inputValue()==='DRAFT_LAYOUT\n','IME composition Enter leaves the draft intact');
+ await input().fill('line\n'.repeat(25));assert(await input().evaluate(n=>n.getBoundingClientRect().height<=150&&n.scrollHeight>n.clientHeight),'Long drafts grow to the desktop limit then scroll');
+ await input().fill('PRESERVE_LAYOUT_DRAFT');await panel().getByRole('button',{name:'Terminal',exact:true}).click();
+ assert(await panel().locator('.reader-composer').isHidden()&&await panel().getByRole('button',{name:'Copy selection',exact:true}).getAttribute('aria-label')==='Copy selection','Terminal mode hides the composer and labels its compact actions');
+ await panel().getByRole('button',{name:'Reader',exact:true}).click();assert(await input().inputValue()==='PRESERVE_LAYOUT_DRAFT','Switching views preserves the Reader draft');
+ await page.getByRole('button',{name:'Pin session tab',exact:true}).click();await beta().click();await page.locator('.editor-tab').filter({hasText:'workbench-alpha'}).click();assert(await input().inputValue()==='PRESERVE_LAYOUT_DRAFT','Switching sessions preserves a pinned draft');
+ await panel().getByRole('button',{name:'Rename session',exact:true}).click();assert(await panel().getByRole('textbox',{name:'New session name',exact:true}).inputValue()==='workbench-alpha','Inline rename still fits the compact header');await panel().getByRole('textbox',{name:'New session name',exact:true}).focus();await page.keyboard.press('Escape');
+ await input().fill("printf 'SESSION_LAYOUT_SEND_OK\\n'");await input().press('Enter');await page.waitForFunction(()=>document.querySelector('.editor-panel:not([hidden]) .reader-input')?.value==='');
+ await page.waitForFunction(()=>document.querySelector('.editor-panel:not([hidden]) .reader-content')?.textContent.includes('SESSION_LAYOUT_SEND_OK'));
+ assert(true,'Enter sends real input to isolated tmux and clears the successful draft');
+ await input().fill("printf 'SESSION_LAYOUT_BUTTON_OK\\n'");await panel().getByRole('button',{name:'Send',exact:true}).click();await page.waitForFunction(()=>document.querySelector('.editor-panel:not([hidden]) .reader-input')?.value==='');assert(true,'Send button submits real tmux input');
+ await panel().getByRole('button',{name:'Reconnect session',exact:true}).click();await panel().locator('.connection-dot[data-state="connected"]').waitFor();assert(true,'Compact reconnect remains available and reconnects');
+ await page.locator('#theme-button').click();const follow=panel().locator('.reader-follow-button');if(await follow.getAttribute('aria-pressed')==='true')await follow.click();await page.waitForTimeout(200);const off=await follow.evaluate(n=>getComputedStyle(n).backgroundColor);await follow.click();await page.waitForTimeout(200);assert(await follow.getAttribute('aria-pressed')==='true'&&await follow.evaluate(n=>getComputedStyle(n).backgroundColor)!==off,'Light-theme auto-follow keeps a distinct active state');
+ await page.screenshot({path:'artifacts/session-layout-after-light.png',animations:'disabled'});await page.locator('#theme-button').click();await page.screenshot({path:'artifacts/session-layout-after-desktop.png',animations:'disabled'});
+ await page.getByRole('button',{name:'Split right',exact:true}).click();await page.waitForTimeout(200);
+ assert(await page.locator('.editor-panel:not([hidden])').evaluateAll(ns=>ns.every(n=>n.scrollWidth<=n.clientWidth)),'Narrow split panes fit the responsive header and composer');
+ const hintIds=await page.locator('.editor-panel:not([hidden]) .composer-hint').evaluateAll(ns=>ns.map(n=>n.id));assert(new Set(hintIds).size===hintIds.length,'Split inputs keep unique accessible hint IDs');await page.screenshot({path:'artifacts/session-layout-after-split.png',animations:'disabled'});
+ await page.locator('.editor-group.active .editor-tab.active .tab-close').click();await page.setViewportSize({width:390,height:844});await page.waitForTimeout(350);
+ const mobile=await measure();assert(mobile['editor-toolbar']<115&&mobile['reader-composer']<=105&&await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Phone chrome stays compact without horizontal overflow');
+ assert(await input().evaluate(n=>getComputedStyle(n).fontSize==='16px')&&await panel().locator('.send-button').evaluate(n=>n.getBoundingClientRect().width>=38),'Phone input remains readable with an accessible send target');
+ await input().fill('line\n'.repeat(25));assert(await input().evaluate(n=>n.getBoundingClientRect().height<=108&&n.scrollHeight>n.clientHeight),'Long phone drafts respect the smaller height limit');await input().fill('');
+ await panel().getByRole('button',{name:'Rename session',exact:true}).click();assert(await panel().evaluate(n=>n.scrollWidth<=n.clientWidth),'Phone rename does not overflow the header');await panel().getByRole('textbox',{name:'New session name',exact:true}).focus();await page.keyboard.press('Escape');await page.screenshot({path:'artifacts/session-layout-after-mobile.png',animations:'disabled'});
+ assert(errors.length===0,'No header or composer browser runtime errors');return{checks,count:checks.length,errors,desktop,mobile};
+}

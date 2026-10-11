@@ -1,0 +1,77 @@
+async page => {
+  const checks = [];
+  const errors = [];
+  const assert = (value, message) => { if (!value) throw new Error(message); checks.push(message); };
+  page.on('pageerror', error => errors.push(error.message));
+  if (await page.locator('.file-editor-panel:not([hidden]) .file-editor-dirty').isVisible().catch(() => false)) {
+    await page.evaluate(() => { window.confirm = () => true; });
+    await page.getByRole('button', { name: 'Reload file', exact: true }).click();
+    await page.locator('.file-editor-panel:not([hidden]) .file-editor-dirty').waitFor({ state: 'hidden' });
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('http://127.0.0.1:17690/');
+  await page.evaluate(async () => {
+    for (const registration of await navigator.serviceWorker.getRegistrations()) await registration.unregister();
+    for (const key of await caches.keys()) if (key.startsWith('workbench-shell-')) await caches.delete(key);
+    localStorage.clear();
+  });
+  await page.reload();
+  const alpha = () => page.locator('.session-card').filter({ hasText: 'workbench-alpha' });
+  const beta = () => page.locator('.session-card').filter({ hasText: 'workbench-beta' });
+  await alpha().click();
+  await beta().click();
+  assert(await page.locator('.editor-tab').count() === 1 && await page.locator('.editor-tab .tab-label').textContent() === 'workbench-beta', 'Single-click switches sessions through one preview tab');
+  await page.getByRole('button', { name: 'Pin session tab', exact: true }).click();
+  await alpha().click();
+  assert(await page.locator('.editor-tab').count() === 2, 'Pinned session survives opening a new preview');
+  await alpha().dblclick();
+  assert(await page.getByRole('button', { name: 'Unpin session tab', exact: true }).count() === 2, 'Double-clicking a session pins its tab');
+  await page.locator('.editor-tab').filter({ hasText: 'workbench-alpha' }).click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Close other tabs', exact: true }).click();
+  assert(await page.locator('.editor-tab').count() === 1 && await page.locator('.session-card').count() === 2, 'Close other tabs cleans the pane without terminating sessions');
+  await page.locator('.editor-tab .tab-label').click({ button: 'middle' });
+  assert(await page.locator('.editor-tab').count() === 0, 'Middle click closes a tab');
+  await alpha().click();
+  await page.getByRole('button', { name: 'Split right', exact: true }).click();
+  assert(await page.locator('.editor-group').count() === 2, 'Preview sessions retain deliberate split support');
+  await beta().click();
+  assert(await page.locator('.editor-group').count() === 2 && await page.locator('.editor-group').first().locator('.tab-label').first().textContent() === 'workbench-alpha', 'Switching a session preserves the other split pane');
+  await page.screenshot({ path: 'artifacts/workbench-split.png', animations: 'disabled' });
+  // Close this fixture workspace before testing file edits in one pane.
+  while (await page.locator('.editor-tab').count()) await page.locator('.editor-tab .tab-close').first().click();
+  await alpha().click();
+  await page.locator('.file-tree-row[data-path="README.md"]').click();
+  await page.locator('.file-editor-panel:not([hidden]) .monaco-editor').waitFor();
+  await page.waitForFunction(() => document.querySelector('.file-editor-panel:not([hidden]) .view-lines')?.textContent.replace(/\u00a0/g, ' ').includes('Workbench browser fixture'));
+  await page.locator('.file-editor-panel:not([hidden]) .monaco-editor').click();
+  await page.keyboard.press('Control+End');
+  await page.keyboard.insertText('\nWORKBENCH_EDIT_SAVED\n');
+  await page.locator('.file-editor-panel:not([hidden]) .file-editor-dirty').waitFor({ state: 'visible' });
+  assert(await page.locator('.editor-tab.file-tab.active.dirty .tab-pin').count() === 1, 'Editing automatically pins the file and marks unsaved changes');
+  assert(await page.locator('.editor-group.active .group-action.split-right').isDisabled() && await page.locator('.editor-group.active .group-action.split-down').isDisabled(), 'Unsaved file edits are protected from stale split duplication');
+  await page.keyboard.press('Control+s');
+  await page.locator('.file-editor-panel:not([hidden]) .file-editor-dirty').waitFor({ state: 'hidden' });
+  const saved = await (await page.request.get('http://127.0.0.1:17690/api/file?session=workbench-alpha&path=README.md')).json();
+  assert(saved.content.includes('WORKBENCH_EDIT_SAVED') && /^[0-9a-f]{64}$/.test(saved.revision), 'Ctrl+S writes the real file and returns its new revision');
+  await page.keyboard.insertText('LOCAL_UNSAVED_BUFFER\n');
+  await page.locator('.file-editor-panel:not([hidden]) .file-editor-dirty').waitFor({ state: 'visible' });
+  await page.evaluate(() => { window.confirmationMessages = []; window.confirm = message => { window.confirmationMessages.push(message); return false; }; });
+  await page.getByRole('button', { name: 'Close README.md', exact: true }).click();
+  assert(await page.locator('.file-editor-panel:not([hidden]) .monaco-editor').count() === 1 && await page.evaluate(() => window.confirmationMessages.length > 0), 'Closing an unsaved file asks before discarding and respects cancel');
+  const external = await page.request.put('http://127.0.0.1:17690/api/file', { headers: { Origin: 'http://127.0.0.1:17690' }, data: { session: 'workbench-alpha', path: 'README.md', root: saved.root, content: saved.content + '\nEXTERNAL_UPDATE\n', revision: saved.revision } });
+  assert(external.ok(), 'A concurrent writer can save its own valid revision');
+  await page.getByRole('button', { name: 'Save file', exact: true }).click();
+  await page.waitForFunction(() => document.querySelector('.file-editor-panel:not([hidden]) .file-editor-message')?.textContent.toLowerCase().includes('changed'));
+  const conflicted = await (await page.request.get('http://127.0.0.1:17690/api/file?session=workbench-alpha&path=README.md')).json();
+  assert(conflicted.content.includes('EXTERNAL_UPDATE') && !conflicted.content.includes('LOCAL_UNSAVED_BUFFER') && await page.locator('.file-editor-panel:not([hidden]) .file-editor-dirty').isVisible(), 'A stale save preserves the external file and keeps the local unsaved buffer');
+  await page.screenshot({ path: 'artifacts/workbench-edit.png', animations: 'disabled' });
+  await page.evaluate(() => { window.confirm = () => true; });
+  await page.getByRole('button', { name: 'Reload file', exact: true }).click();
+  await page.locator('.file-editor-panel:not([hidden]) .file-editor-dirty').waitFor({ state: 'hidden' });
+  await page.reload();
+  await page.locator('.editor-tab.file-tab.active').waitFor();
+  await page.waitForFunction(() => document.querySelector('.file-editor-panel:not([hidden]) .view-lines')?.textContent.replace(/\u00a0/g, ' ').includes('EXTERNAL_UPDATE'));
+  assert(true, 'Reload restores the file tab from metadata and fetches current disk content');
+  assert(errors.length === 0, `No editor runtime errors (${errors.join('; ')})`);
+  return { checks, errors, count: checks.length };
+}

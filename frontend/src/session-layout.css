@@ -1,0 +1,155 @@
+/* Session chrome stays compact while output owns the available pane height. */
+.editor-panel .editor-toolbar {
+  min-height: 54px;
+  gap: 14px;
+  padding: 8px 14px;
+}
+.editor-panel .session-identity { gap: 9px; }
+.editor-panel .session-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 0;
+  color: var(--workbench-control-muted);
+  background: transparent;
+  font-size: 14px;
+}
+.session-title-row { display: flex; min-width: 0; align-items: center; gap: 7px; margin-bottom: 1px; }
+.editor-panel .session-name-display { min-width: 0; gap: 3px; margin-bottom: 0; }
+.editor-panel .session-identity h1 { max-width: 100%; font-size: 13px; font-weight: 600; }
+.editor-panel .rename-button { width: 24px; height: 22px; }
+.session-context { display: flex; min-width: 0; align-items: center; gap: 10px; }
+.editor-panel .active-path {
+  display: block;
+  min-width: 0;
+  width: auto;
+  flex: 1;
+  margin: 0;
+  font-size: 10px;
+  line-height: 16px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.editor-panel .connection-line { min-width: 0; max-width: 104px; flex: none; gap: 4px; padding: 1px 6px; border: 1px solid #e4e4e7; border-radius: 10px; color: #71717a; background: #f4f4f5; font-size: 9px; font-weight: 500; line-height: 14px; }
+.editor-panel .connection-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.editor-panel .connection-dot { width: 5px; height: 5px; flex: none; margin: 0; background: #a1a1aa; box-shadow: none; }
+.editor-panel .connection-line[data-state="connected"] { border-color: #bbf7d0; color: #15803d; background: #f0fdf4; }
+.editor-panel .connection-line[data-state="connected"] .connection-dot { background: #22a35a; }
+.editor-panel .connection-line[data-state="connecting"] { border-color: #fde68a; color: #a16207; background: #fffbeb; }
+.editor-panel .connection-line[data-state="connecting"] .connection-dot { background: #d3a145; }
+.editor-panel .connection-line[data-state="disconnected"],
+.editor-panel .connection-line[data-state="ended"] { border-color: #fecaca; color: #b91c1c; background: #fef2f2; }
+.editor-panel .connection-line[data-state="disconnected"] .connection-dot,
+.editor-panel .connection-line[data-state="ended"] .connection-dot { background: #cf6e6e; }
+.editor-panel .toolbar-actions { display: flex; width: auto; gap: 5px; }
+.editor-panel .view-switch { padding: 2px; border-radius: 7px; }
+.editor-panel .view-switch button { min-height: 28px; padding: 4px 8px; font-size: 10px; }
+.editor-panel .action-button {
+  width: 30px;
+  min-width: 30px;
+  min-height: 30px;
+  justify-content: center;
+  padding: 0;
+  border-color: transparent;
+  border-radius: 6px;
+  background: transparent;
+}
+.editor-panel .action-button .action-label { display: none; }
+.editor-panel .reader-follow-button[aria-pressed="true"] { border-color: var(--workbench-control-border); color: var(--workbench-control-text); background: var(--workbench-control-hover-bg); }
+.editor-panel .rename-form { min-width: 0; width: 100%; margin-bottom: 0; }
+.editor-panel .rename-form input { min-width: 0; width: min(220px, 100%); flex: 1; }
+
+/* Input and terminal keys are one dock, with secondary controls below the draft. */
+.editor-panel .reader-composer {
+  padding: 8px clamp(14px, 3cqw, 28px) 10px;
+  border-top: 0;
+  background: var(--reader-bg);
+}
+.editor-panel .composer-row {
+  display: flex;
+  width: min(840px, 100%);
+  flex-direction: column;
+  align-items: stretch;
+  gap: 3px;
+  padding: 8px 10px 5px;
+  border-color: var(--workbench-control-border);
+  border-radius: 10px;
+  background: var(--workbench-control-bg);
+  box-shadow: 0 2px 10px #18181b08;
+}
+.editor-panel .composer-row:focus-within {
+  border-color: var(--workbench-control-ring);
+  box-shadow: 0 0 0 2px var(--workbench-control-ring-wash);
+}
+.editor-panel .reader-input {
+  display: block;
+  min-height: 24px;
+  max-height: 150px;
+  padding: 2px 3px;
+  font-size: 13px;
+  line-height: 20px;
+}
+.composer-actions { display: flex; min-width: 0; align-items: center; gap: 10px; }
+.editor-panel .reader-shortcuts {
+  display: flex;
+  width: auto;
+  flex: none;
+  gap: 2px;
+  margin: 0;
+}
+.editor-panel .reader-shortcuts button {
+  min-height: 26px;
+  padding: 4px 7px;
+  border: 0;
+  border-radius: 5px;
+  color: var(--workbench-control-muted);
+  background: transparent;
+  font: inherit;
+  font-size: 10px;
+}
+.editor-panel .reader-shortcuts button:hover { color: var(--workbench-control-text); background: var(--workbench-control-hover-bg); }
+.composer-hint { margin-left: auto; color: var(--workbench-control-muted); font-size: 10px; }
+.editor-panel .send-button { width: 28px; height: 28px; margin-left: auto; padding: 0; border-radius: 7px; }
+.composer-hint + .send-button { margin-left: 0; }
+.send-button svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.editor-panel .reader-shortcuts button:focus-visible,
+.editor-panel .send-button:focus-visible,
+.editor-panel .action-button:focus-visible,
+.editor-panel .rename-button:focus-visible,
+.editor-panel .view-switch button:focus-visible { outline: 2px solid var(--workbench-control-ring); outline-offset: 2px; }
+:root[data-color-scheme="dark"] .editor-panel .session-icon { color: var(--workbench-control-muted); background: transparent; }
+:root[data-color-scheme="dark"] .editor-panel .connection-line { border-color: #3f3f46; color: #a1a1aa; background: #27272a; }
+:root[data-color-scheme="dark"] .editor-panel .connection-line[data-state="connected"] { border-color: #86bf932b; color: #a3c6aa; background: #86bf930e; }
+:root[data-color-scheme="dark"] .editor-panel .connection-line[data-state="connected"] .connection-dot { background: #86bf93; }
+:root[data-color-scheme="dark"] .editor-panel .connection-line[data-state="connecting"] { border-color: #d3a14535; color: #cdb782; background: #d3a14510; }
+:root[data-color-scheme="dark"] .editor-panel .connection-line[data-state="disconnected"],
+:root[data-color-scheme="dark"] .editor-panel .connection-line[data-state="ended"] { border-color: #cf6e6e35; color: #dca5a5; background: #cf6e6e10; }
+:root[data-color-scheme="dark"] .editor-panel .action-button { border-color: transparent; background: transparent; }
+:root[data-color-scheme="dark"] .editor-panel .reader-follow-button[aria-pressed="true"] { border-color: #52525b; color: #f4f4f5; background: #3f3f46; }
+:root[data-color-scheme="dark"] .editor-panel .reader-composer { background: var(--reader-bg); }
+:root[data-color-scheme="dark"] .editor-panel .composer-row { border-color: var(--workbench-control-border); background: #202023; box-shadow: 0 2px 10px #0002; }
+:root[data-color-scheme="dark"] .editor-panel .composer-row:focus-within { border-color: var(--workbench-control-ring); box-shadow: 0 0 0 2px var(--workbench-control-ring-wash); }
+:root[data-color-scheme="dark"] .editor-panel .reader-shortcuts button { color: var(--workbench-control-muted); background: transparent; }
+:root[data-color-scheme="dark"] .editor-panel .reader-shortcuts button:hover { color: var(--workbench-control-text); background: #27272a; }
+
+@container (max-width: 620px) {
+  .editor-panel .editor-toolbar { display: grid; grid-template-columns: minmax(0, 1fr); gap: 5px; padding: 7px 10px; }
+  .editor-panel .toolbar-actions { width: 100%; }
+  .editor-panel .view-switch { display: flex; flex: 1; }
+  .editor-panel .view-switch button { flex: 1; }
+  .editor-panel .session-icon { display: none; }
+  .editor-panel .composer-hint { display: none; }
+  .editor-panel .send-button { margin-left: auto; }
+  .editor-panel .reader-composer { padding-inline: 12px; }
+}
+@media (max-width: 760px), (pointer: coarse) {
+  .editor-panel .rename-button { width: 36px; height: 30px; }
+  .editor-panel .action-button { width: 40px; min-width: 40px; min-height: 40px; }
+  .editor-panel .view-switch button { min-height: 36px; font-size: 11px; }
+  .editor-panel .reader-shortcuts button { min-width: 40px; min-height: 38px; padding-inline: 9px; font-size: 11px; }
+  .editor-panel .send-button { width: 38px; height: 38px; }
+  .editor-panel .reader-input { min-height: 28px; max-height: 108px; font-size: 16px; line-height: 24px; }
+  .editor-panel .reader-composer { padding: 8px 10px calc(10px + env(safe-area-inset-bottom)); }
+  .editor-panel .composer-row { gap: 3px; padding: 8px 8px 5px; }
+  .editor-panel .composer-hint { display: none; }
+  .editor-panel .send-button { margin-left: auto; }
+}

@@ -1,0 +1,53 @@
+async page => {
+ const base='http://127.0.0.1:17690',checks=[],errors=[];
+ const assert=(ok,message)=>{if(!ok)throw new Error(message);checks.push(message);};page.on('pageerror',e=>errors.push(e.message));
+ await page.context().grantPermissions(['clipboard-read','clipboard-write'],{origin:base});
+ await page.setViewportSize({width:1440,height:900});await page.goto(base);
+ await page.evaluate(()=>localStorage.clear());await page.reload();
+ await page.locator('.session-card').filter({hasText:'workbench-alpha'}).click();
+ const row=path=>page.locator('.file-tree-row[data-path="'+path+'"]');
+ await row('drag-target').waitFor();
+ const initialTabs=await page.locator('.editor-tab').count();
+ const transfer=await page.evaluateHandle(()=>{const dt=new DataTransfer();dt.items.add(new File(['NAVIGATION_UPLOAD\n'],'navigation-upload.txt',{type:'text/plain'}));return dt;});
+ const over=async path=>{const target=row(path);await target.scrollIntoViewIfNeeded();const box=await target.boundingBox();await target.dispatchEvent('dragenter',{dataTransfer:transfer,clientX:box.x+30,clientY:box.y+box.height/2});await target.dispatchEvent('dragover',{dataTransfer:transfer,clientX:box.x+30,clientY:box.y+box.height/2});};
+ try{
+  await over('drag-target');
+  const hint=page.locator('.file-browser-drop-overlay');const box=await hint.boundingBox();
+  assert(box.height<70&&await hint.evaluate(n=>getComputedStyle(n).pointerEvents)==='none','Drag destination hint is compact and does not block directory navigation');
+  await row('drag-target/nested').waitFor();assert(await row('drag-target').getAttribute('aria-expanded')==='true','Dragging over a collapsed directory expands it');
+  await over('drag-target/nested');await row('drag-target/nested/leaf').waitFor();
+  await over('drag-target/nested/leaf');await row('drag-target/nested/leaf/existing.txt').waitFor();
+  assert(await hint.textContent().then(s=>s.includes('drag-target/nested/leaf')),'Nested navigation updates the precise upload destination');
+  await row('drag-target/nested/leaf').dispatchEvent('drop',{dataTransfer:transfer});
+  await row('drag-target/nested/leaf/navigation-upload.txt').waitFor();
+  const file=await(await page.request.get(base+'/api/file?session=workbench-alpha&path=drag-target%2Fnested%2Fleaf%2Fnavigation-upload.txt')).json();
+  assert(file.content==='NAVIGATION_UPLOAD\n','Dropping after hover navigation uploads into the selected nested directory');
+  assert((await page.request.get(base+'/api/file?session=workbench-alpha&path=navigation-upload.txt')).status()===404&&await page.locator('.editor-tab').count()===initialTabs,'Nested upload neither lands at the root nor opens a workspace tab');
+  await row('drag-target/nested/leaf/navigation-upload.txt').click({button:'right'});
+  const menu=page.getByRole('menu',{name:'File path actions',exact:true});
+  const expected='/tmp/workbench-e2e/project/drag-target/nested/leaf/navigation-upload.txt';
+  await menu.waitFor();assert(await menu.locator('.file-path-menu-value').textContent()===expected,'Right-click shows the full absolute file path');
+  await menu.getByRole('menuitem',{name:'Copy full path',exact:true}).click();
+  assert(await page.evaluate(()=>navigator.clipboard.readText())===expected,'Copy full path writes the exact absolute path to the clipboard');
+  await row('drag-target/nested/leaf').click({button:'right'});await menu.waitFor();
+  assert(await menu.locator('.file-path-menu-value').textContent()==='/tmp/workbench-e2e/project/drag-target/nested/leaf','Directory right-click shows its full path');
+  await page.locator('#session-search-input').click();assert(!await menu.isVisible(),'Outside click dismisses the file path menu');
+  await row('drag-target/nested/leaf/existing.txt').focus();await page.keyboard.press('Shift+F10');await menu.waitFor();
+  await page.keyboard.press('Escape');assert(!await menu.isVisible()&&await row('drag-target/nested/leaf/existing.txt').evaluate(n=>document.activeElement===n),'Keyboard context menu and Escape return focus to the file row');
+  await over('drag-cancel');await page.keyboard.press('Escape');await page.waitForTimeout(750);
+  assert(await row('drag-cancel').getAttribute('aria-expanded')==='false'&&!await hint.isVisible(),'Escape cancels pending folder expansion and upload highlighting');
+  await over('drag-scroll');await row('drag-scroll/directory-00').waitFor();
+  const tree=page.locator('.file-browser-tree');const bounds=await tree.boundingBox();await tree.evaluate(n=>n.scrollTop=0);
+  await tree.dispatchEvent('dragover',{dataTransfer:transfer,clientX:bounds.x+30,clientY:bounds.y+bounds.height-4});
+  await page.waitForTimeout(350);assert(await tree.evaluate(n=>n.scrollTop)>40,'Dragging near the file-tree edge scrolls toward offscreen directories');
+  await page.keyboard.press('Escape');const stopped=await tree.evaluate(n=>n.scrollTop);await page.waitForTimeout(200);assert(await tree.evaluate(n=>n.scrollTop)===stopped,'Cancelling a file drag stops edge scrolling');
+  await over('drag-cancel');await page.getByRole('button',{name:'Refresh files',exact:true}).click();await row('drag-cancel').waitFor();await page.waitForTimeout(750);
+  assert(await row('drag-cancel').getAttribute('aria-expanded')==='false'&&!await hint.isVisible(),'Refresh cancels pending directory hover actions');
+  await row('README.md').click({button:'right'});await menu.waitFor();await tree.dispatchEvent('scroll');assert(!await menu.isVisible(),'Tree scrolling dismisses the path menu');
+  await row('README.md').click({button:'right'});await menu.waitFor();await page.screenshot({path:'artifacts/workbench-file-path-menu.png',animations:'disabled'});
+  await page.setViewportSize({width:390,height:844});await page.locator('#mobile-files-toggle').click();await row('README.md').click({button:'right'});await menu.waitFor();
+  assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Phone file path menu stays within the file drawer');
+  await page.screenshot({path:'artifacts/workbench-file-path-mobile.png',animations:'disabled'});
+  assert(errors.length===0,'No drag navigation or file path runtime errors');return{checks,count:checks.length,errors};
+ }finally{await transfer.dispose();}
+}

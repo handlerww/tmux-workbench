@@ -1,0 +1,40 @@
+#!/bin/sh
+set -eu
+
+# Enter the host filesystem, network and user together. Git worktree metadata
+# and GitHub CLI authentication refer to host paths; host DNS belongs to its
+# network namespace as well.
+case "${HOST_UID:-0}:${HOST_GID:-0}" in
+  *[!0-9:]*|:*|*:) echo 'host-git: invalid host user' >&2; exit 2 ;;
+esac
+case "${1:-}" in
+  git|gh) ;;
+  *) echo 'host-git: unsupported tool' >&2; exit 2 ;;
+esac
+case "${2:-}" in
+  /*) ;;
+  *) echo 'host-git: an absolute repository directory is required' >&2; exit 2 ;;
+esac
+
+exec nsenter --mount=/proc/1/ns/mnt --net=/proc/1/ns/net --root=/proc/1/root --wdns=/ \
+  --setuid="${HOST_UID:-0}" --setgid="${HOST_GID:-0}" \
+  -- /bin/sh -c '
+    set -eu
+    tool=$1
+    repository=$2
+    shift 2
+    PATH=/usr/local/bin:/usr/bin:/bin
+    export PATH
+    user_home=$(getent passwd "$(id -u)" | cut -d: -f6)
+    [ -n "$user_home" ] || exit 2
+    HOME=$user_home
+    export HOME
+    unset XDG_CONFIG_HOME XDG_CACHE_HOME XDG_DATA_HOME GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+    GIT_OPTIONAL_LOCKS=0
+    GIT_TERMINAL_PROMPT=0
+    GH_PROMPT_DISABLED=1
+    GH_PAGER=cat
+    export GIT_OPTIONAL_LOCKS GIT_TERMINAL_PROMPT GH_PROMPT_DISABLED GH_PAGER
+    cd -- "$repository"
+    exec "$tool" "$@"
+  ' host-git "$@"

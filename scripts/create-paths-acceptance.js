@@ -1,0 +1,57 @@
+async page => {
+  const base = 'http://127.0.0.1:17690';
+  const checks = [];
+  const errors = [];
+  const posts = [];
+  const assert = (value, message) => { if (!value) throw new Error(message); checks.push(message); };
+  page.on('pageerror', error => errors.push(error.message));
+  page.on('request', request => { if (request.method() === 'POST' && request.url() === base + '/api/sessions') posts.push(request.postDataJSON()); });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(base);
+  await page.evaluate(async () => {
+    for (const registration of await navigator.serviceWorker.getRegistrations()) await registration.unregister();
+    for (const key of await caches.keys()) if (key.startsWith('workbench-shell-')) await caches.delete(key);
+    localStorage.clear();
+    localStorage.setItem('workbench.recentPaths.v1', JSON.stringify(Array.from({ length: 10 }, (_, index) => `/tmp/workbench-e2e/history/${index}`)));
+  });
+  await page.reload();
+  await page.locator('.session-card').first().waitFor();
+  await page.getByRole('button', { name: 'Create tmux session', exact: true }).click();
+  const search = page.getByRole('searchbox', { name: 'Search paths', exact: true });
+  await search.waitFor();
+  const selectedBefore = await page.locator('#create-session-path').inputValue();
+  assert(await page.locator('.create-session-recent-path').count() === 10, 'New-session path candidates retain the ten-result display limit');
+  await search.fill('WORKBENCH-E2E  OTHER');
+  assert(await page.locator('.create-session-recent-path').count() === 1 && await page.locator('.create-session-recent-path').getAttribute('title') === '/tmp/workbench-e2e/other', 'Case-insensitive multiple keywords find session paths beyond the initial recent-path limit');
+  assert(await page.locator('#create-session-path').inputValue() === selectedBefore, 'Searching does not replace the chosen working directory');
+  await search.press('Enter');
+  await page.waitForTimeout(100);
+  assert(posts.length === 0, 'Enter in path search does not create a session');
+  await search.fill('definitely-missing-workbench-path');
+  assert(await page.locator('.create-session-recent-path').count() === 0 && await page.locator('.create-session-recent-empty').textContent() === 'No matching paths.', 'Unmatched path keywords show an empty result state');
+  await search.press('Escape');
+  assert(await search.inputValue() === '' && await page.locator('.create-session-recent-path').count() === 10, 'Escape clears keywords and restores path suggestions');
+  await search.fill('history/7');
+  assert(await page.locator('.create-session-recent-path').count() === 1 && await page.locator('.create-session-recent-path').getAttribute('title') === '/tmp/workbench-e2e/history/7', 'Keywords also match browser-recent path fragments');
+  await page.setViewportSize({ width: 390, height: 844 });
+  assert(await search.isVisible() && await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), 'Path search is usable on phones without horizontal overflow');
+  await page.screenshot({ path: 'artifacts/workbench-create-path-search.png', animations: 'disabled' });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await search.fill('other');
+  await page.locator('.create-session-recent-path').click();
+  assert(await page.locator('#create-session-path').inputValue() === '/tmp/workbench-e2e/other', 'Selecting a matching path fills the working directory');
+  await page.locator('#create-session-path').fill('/tmp/workbench-e2e/project');
+  assert(await search.inputValue() === 'other', 'Working directory remains manually editable independently of keywords');
+  await page.locator('.create-session-recent-path').click();
+  const responsePromise = page.waitForResponse(response => response.url() === base + '/api/sessions' && response.request().method() === 'POST');
+  await page.getByRole('button', { name: 'Create session', exact: true }).click();
+  const response = await responsePromise;
+  const body = await response.json();
+  assert(response.status() === 201 && body.session?.path === '/tmp/workbench-e2e/other' && posts.length === 1 && posts[0].path === '/tmp/workbench-e2e/other', 'Creation submits the selected absolute path to the isolated tmux server');
+  await page.waitForFunction(async sessionId => {
+    const response = await fetch('/api/files?' + new URLSearchParams({ session: sessionId }));
+    return (await response.json()).root === '/tmp/workbench-e2e/other';
+  }, body.session.id);
+  assert(errors.length === 0, 'No create-path-search browser runtime errors');
+  return { checks, count: checks.length, errors, createdSessionId: body.session.id };
+}

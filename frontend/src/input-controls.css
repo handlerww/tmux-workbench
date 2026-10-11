@@ -1,0 +1,190 @@
+:root {
+  --workbench-control-bg: #fff;
+  --workbench-control-hover-bg: #fafafa;
+  --workbench-control-border: #d4d4d8;
+  --workbench-control-hover-border: #a1a1aa;
+  --workbench-control-text: #27272a;
+  --workbench-control-muted: #71717a;
+  --workbench-control-ring: #71717a;
+  --workbench-control-ring-wash: #71717a20;
+}
+
+/* Search has an icon and clear action, so its wrapper owns the control surface. */
+.session-search {
+  border-color: var(--workbench-control-border);
+  border-radius: 7px;
+  color: var(--workbench-control-muted);
+  background: var(--workbench-control-hover-bg);
+  transition: border-color .14s ease, box-shadow .14s ease, background .14s ease;
+}
+.session-search:hover { border-color: var(--workbench-control-hover-border); }
+.session-search:focus-within {
+  border-color: var(--workbench-control-ring);
+  background: var(--workbench-control-bg);
+  box-shadow: 0 0 0 2px var(--workbench-control-ring-wash);
+}
+.session-search input { color: var(--workbench-control-text); }
+.session-search input::placeholder { color: var(--workbench-control-muted); opacity: .72; }
+
+/* Keep create/rename dimensions, while standardizing their surface and focus. */
+.create-session-field input[type="text"],
+.create-session-field input[type="search"],
+.rename-form input.rename-input {
+  border: 1px solid var(--workbench-control-border);
+  border-radius: 6px;
+  color: var(--workbench-control-text);
+  background: var(--workbench-control-bg);
+  box-shadow: none;
+  transition: border-color .14s ease, box-shadow .14s ease, background .14s ease;
+}
+.create-session-field input[type="text"]:hover:not(:disabled),
+.create-session-field input[type="search"]:hover:not(:disabled),
+.rename-form input.rename-input:hover:not(:disabled) {
+  border-color: var(--workbench-control-hover-border);
+}
+.create-session-field input[type="text"]:focus,
+.create-session-field input[type="search"]:focus,
+.rename-form input.rename-input:focus {
+  border-color: var(--workbench-control-ring);
+  outline: none;
+  box-shadow: 0 0 0 2px var(--workbench-control-ring-wash);
+}
+.create-session-field input::placeholder,
+.rename-form input.rename-input::placeholder { color: var(--workbench-control-muted); opacity: .72; }
+.create-session-field input:disabled,
+.rename-form input.rename-input:disabled { color: var(--workbench-control-muted); background: #f4f4f5; cursor: not-allowed; }
+.create-session-field input[readonly],
+.rename-form input.rename-input[readonly] { background: #f4f4f5; }
+
+/* Git search and filtering use the same neutral field as workspace search. */
+.git-panel .git-repository-search,
+.git-panel .git-changes-filter,
+.pr-panel .pr-panel-filter {
+  border-color: var(--workbench-control-border);
+  border-radius: 6px;
+  color: var(--workbench-control-text);
+  background: var(--workbench-control-bg);
+  box-shadow: none;
+  transition: border-color .14s ease, box-shadow .14s ease, background .14s ease;
+}
+.git-panel .git-repository-search:hover:not(:disabled),
+.git-panel .git-changes-filter:hover:not(:disabled),
+.pr-panel .pr-panel-filter:hover:not(:disabled) { border-color: var(--workbench-control-hover-border); }
+.git-panel .git-repository-search:focus,
+.git-panel .git-changes-filter:focus-visible,
+.pr-panel .pr-panel-filter:focus-visible {
+  border-color: var(--workbench-control-ring);
+  outline: none;
+  box-shadow: 0 0 0 2px var(--workbench-control-ring-wash);
+}
+.git-panel .git-repository-search::placeholder,
+.git-panel .git-changes-filter::placeholder,
+.pr-panel .pr-panel-filter::placeholder { color: var(--workbench-control-muted); opacity: .72; }
+.git-panel .git-repository-search:disabled,
+.git-panel .git-changes-filter:disabled,
+.pr-panel .pr-panel-filter:disabled { color: var(--workbench-control-muted); background: #f4f4f5; cursor: not-allowed; }
+
+/* Both selects keep their compact desktop height and get a clear keyboard ring. */
+.search-group-move,
+.session-hover-group-select {
+  border-color: var(--workbench-control-border);
+  border-radius: 6px;
+  color: var(--workbench-control-text);
+  background-color: var(--workbench-control-bg);
+  transition: border-color .14s ease, box-shadow .14s ease, background .14s ease;
+}
+.search-group-move:hover:not(:disabled),
+.session-hover-group-select:hover:not(:disabled) { border-color: var(--workbench-control-hover-border); }
+.search-group-move:focus-visible,
+.session-hover-group-select:focus-visible {
+  border-color: var(--workbench-control-ring);
+  outline: none;
+  box-shadow: 0 0 0 2px var(--workbench-control-ring-wash);
+}
+.search-group-move:disabled,
+.session-hover-group-select:disabled { color: var(--workbench-control-muted); background-color: #f4f4f5; cursor: not-allowed; }
+
+:root[data-color-scheme="dark"] {
+  --workbench-control-bg: #18181b;
+  --workbench-control-hover-bg: #1f1f22;
+  --workbench-control-border: #3f3f46;
+  --workbench-control-hover-border: #71717a;
+  --workbench-control-text: #e4e4e7;
+  --workbench-control-muted: #a1a1aa;
+  --workbench-control-ring: #a1a1aa;
+  --workbench-control-ring-wash: #a1a1aa24;
+}
+:root[data-color-scheme="dark"] .create-session-field input:disabled,
+:root[data-color-scheme="dark"] .rename-form input.rename-input:disabled,
+:root[data-color-scheme="dark"] .create-session-field input[readonly],
+:root[data-color-scheme="dark"] .rename-form input.rename-input[readonly],
+:root[data-color-scheme="dark"] .git-panel .git-repository-search:disabled,
+:root[data-color-scheme="dark"] .git-panel .git-changes-filter:disabled,
+:root[data-color-scheme="dark"] .pr-panel .pr-panel-filter:disabled,
+:root[data-color-scheme="dark"] .search-group-move:disabled,
+:root[data-color-scheme="dark"] .session-hover-group-select:disabled {
+  background-color: #27272a;
+}
+
+/* Legacy dark theme rules are intentionally scoped; match their specificity. */
+:root[data-color-scheme="dark"] .session-search {
+  border-color: var(--workbench-control-border);
+  color: var(--workbench-control-muted);
+  background: var(--workbench-control-hover-bg);
+}
+:root[data-color-scheme="dark"] .session-search:hover { border-color: var(--workbench-control-hover-border); }
+:root[data-color-scheme="dark"] .session-search:focus-within {
+  border-color: var(--workbench-control-ring);
+  background: var(--workbench-control-bg);
+  box-shadow: 0 0 0 2px var(--workbench-control-ring-wash);
+}
+:root[data-color-scheme="dark"] .session-search input { color: var(--workbench-control-text); }
+:root[data-color-scheme="dark"] .session-search input::placeholder { color: var(--workbench-control-muted); opacity: .72; }
+:root[data-color-scheme="dark"] .create-session-field input[type="text"],
+:root[data-color-scheme="dark"] .create-session-field input[type="search"],
+:root[data-color-scheme="dark"] .rename-form input.rename-input {
+  border-color: var(--workbench-control-border);
+  color: var(--workbench-control-text);
+  background: var(--workbench-control-bg);
+  box-shadow: none;
+}
+:root[data-color-scheme="dark"] .create-session-field input[type="text"]:hover:not(:disabled),
+:root[data-color-scheme="dark"] .create-session-field input[type="search"]:hover:not(:disabled),
+:root[data-color-scheme="dark"] .rename-form input.rename-input:hover:not(:disabled) {
+  border-color: var(--workbench-control-hover-border);
+}
+:root[data-color-scheme="dark"] .create-session-field input[type="text"]:focus,
+:root[data-color-scheme="dark"] .create-session-field input[type="search"]:focus,
+:root[data-color-scheme="dark"] .rename-form input.rename-input:focus {
+  border-color: var(--workbench-control-ring);
+  box-shadow: 0 0 0 2px var(--workbench-control-ring-wash);
+}
+:root[data-color-scheme="dark"] .search-group-move,
+:root[data-color-scheme="dark"] .session-hover-group-select {
+  border-color: var(--workbench-control-border);
+  color: var(--workbench-control-text);
+  background-color: var(--workbench-control-bg);
+}
+:root[data-color-scheme="dark"] .search-group-move:hover:not(:disabled),
+:root[data-color-scheme="dark"] .session-hover-group-select:hover:not(:disabled) { border-color: var(--workbench-control-hover-border); }
+:root[data-color-scheme="dark"] .search-group-move:focus-visible,
+:root[data-color-scheme="dark"] .session-hover-group-select:focus-visible {
+  border-color: var(--workbench-control-ring);
+  box-shadow: 0 0 0 2px var(--workbench-control-ring-wash);
+}
+
+@media (max-width: 760px) {
+  .session-search { min-height: 44px; }
+  .session-search input,
+  .create-session-field input[type="text"],
+  .create-session-field input[type="search"],
+  .rename-form input.rename-input,
+  .git-panel .git-repository-search,
+  .git-panel .git-changes-filter,
+  .pr-panel .pr-panel-filter,
+  .search-group-move,
+  .session-hover-group-select { min-height: 44px; font-size: 16px; }
+  .session-search input { min-height: 0; }
+  .search-group-move,
+  .session-hover-group-select { padding-inline: 10px; }
+}

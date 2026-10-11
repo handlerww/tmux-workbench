@@ -1,0 +1,70 @@
+/* Files, working-tree changes and PR changes share one browsing treatment. */
+.file-browser-tree, .git-changes-list, .pr-panel-tree {
+  padding: 3px 8px 16px;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 12px;
+  --tree-row-color: #a1a1aa;
+  --tree-fg: #e4e4e7;
+  --tree-hover: #27272a;
+  --tree-selected: #27272a;
+}
+:root[data-color-scheme="light"] :is(.file-browser-tree, .git-changes-list, .pr-panel-tree) {
+  --tree-row-color: #52525b;
+  --tree-fg: #27272a;
+  --tree-hover: #f4f4f5;
+  --tree-selected: #e8e8ec;
+}
+.file-tree-row, .git-change-folder, .git-change-variant:not(.git-change-index), .pr-tree-folder, .pr-tree-file {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  height: 29px;
+  min-height: 29px;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 7px;
+  padding: 0 8px 0 calc(7px + var(--tree-depth, 0) * 16px);
+  border: 0;
+  border-radius: 5px;
+  color: var(--tree-row-color);
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  user-select: none;
+}
+:is(.file-tree-row, .git-change-folder, .git-change-variant, .pr-tree-folder, .pr-tree-file):hover {
+  color: var(--tree-fg);
+  background: var(--tree-hover);
+}
+.file-tree-row.selected, .git-change-variant:not(.git-change-index).active, .pr-tree-file.active {
+  color: var(--tree-fg);
+  background: var(--tree-selected);
+}
+:is(.file-tree-row.selected, .git-change-variant:not(.git-change-index).active, .pr-tree-file.active)::before {
+  position: absolute;
+  top: 5px;
+  bottom: 5px;
+  left: 0;
+  width: 2px;
+  border-radius: 2px;
+  background: #818cf8;
+  content: "";
+}
+.file-icon { display: grid; width: 15px; height: 16px; flex: none; place-items: center; color: #71717a; }
+.file-icon svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.35; }
+.file-icon.folder-icon { color: #a1a1aa; }
+.file-icon.document-icon { color: #818cf8; }
+.file-tree-disclosure { display: grid; width: 11px; height: 18px; flex: none; place-items: center; color: #71717a; font-size: 18px; line-height: 1; transform: rotate(0); transition: transform .12s ease; }
+.file-tree-disclosure.expanded { transform: rotate(90deg); }
+.file-tree-disclosure.is-empty { visibility: hidden; }
+.git-change-row { padding-left: 0; }
+.git-change-name, .pr-tree-file-name { font: inherit; }
+
+@media (max-width: 520px) {
+  .file-browser-tree, .git-changes-list, .pr-panel-tree { padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
+  .file-tree-row, .git-change-folder, .git-change-variant:not(.git-change-index), .pr-tree-folder, .pr-tree-file {
+    height: auto;
+    min-height: 40px;
+  }
+}

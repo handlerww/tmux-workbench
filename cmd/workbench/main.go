@@ -9,31 +9,44 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
 
-	"tmux-webui/internal/server"
+	"workbench/internal/server"
 )
 
 func main() {
-	listen := flag.String("listen", "127.0.0.1:7681", "HTTP listen address")
+	configDir, err := os.UserConfigDir()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "workbench: unable to determine the user config directory: %v\n", err)
+		os.Exit(1)
+	}
+	listen := flag.String("listen", "127.0.0.1:7690", "HTTP listen address")
 	tmuxBin := flag.String("tmux", "tmux", "path to the tmux executable")
+	gitRunner := flag.String("git-runner", "", "optional host Git/gh runner accepting tool, directory and arguments")
 	allowRemote := flag.Bool("allow-remote", false, "allow listening on a non-loopback address (no built-in authentication)")
+	filesystemRoot := flag.String("filesystem-root", "", "optional filesystem prefix for host-mounted session directories (e.g. /host)")
+	stateDir := flag.String("state-dir", filepath.Join(configDir, "workbench"), "directory for persistent workspace groups and repository associations")
 	flag.Parse()
 
 	if _, err := exec.LookPath(*tmuxBin); err != nil {
-		fmt.Fprintf(os.Stderr, "tmux-webui: tmux executable not found: %v\n", err)
+		fmt.Fprintf(os.Stderr, "workbench: tmux executable not found: %v\n", err)
 		os.Exit(1)
 	}
 	if !*allowRemote && !isLoopbackListenAddress(*listen) {
-		fmt.Fprintln(os.Stderr, "tmux-webui: refusing a non-loopback listen address without --allow-remote")
-		fmt.Fprintln(os.Stderr, "tmux-webui: use SSH port forwarding for remote access; see README.md")
+		fmt.Fprintln(os.Stderr, "workbench: refusing a non-loopback listen address without --allow-remote")
+		fmt.Fprintln(os.Stderr, "workbench: use SSH port forwarding for remote access; see README.md")
 		os.Exit(2)
 	}
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{}))
-	handler := server.New(*tmuxBin, logger)
+	handler, err := server.NewWithGitOptions(*tmuxBin, logger, *filesystemRoot, *stateDir, *gitRunner)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "workbench: unable to initialize persistent state: %v\n", err)
+		os.Exit(1)
+	}
 	httpServer := &http.Server{
 		Addr:              *listen,
 		Handler:           handler,
@@ -49,7 +62,7 @@ func main() {
 		_ = httpServer.Close()
 	}()
 
-	logger.Info("tmux web UI is ready", "url", "http://"+displayAddress(*listen))
+	logger.Info("Workbench is ready", "url", "http://"+displayAddress(*listen))
 	if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		logger.Error("server stopped", "error", err)
 		os.Exit(1)

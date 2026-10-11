@@ -1,0 +1,28 @@
+services:
+  workbench:
+    image: ${IMAGE:-workbench:local}
+    build:
+      context: .
+    privileged: true
+    pid: host
+    userns_mode: host
+    ports:
+      - 127.0.0.1:${WORKBENCH_PORT:-7690}:7690
+    volumes:
+      - /:/host
+      - workbench-state:/var/lib/workbench
+    environment:
+      HOST_UID: ${HOST_UID:-0}
+      HOST_GID: ${HOST_GID:-0}
+      HOST_TMUX_BIN: ${HOST_TMUX_BIN:-/usr/bin/tmux}
+      TMUX: ""
+      TMUX_TMPDIR: ${TMUX_TMPDIR:-}
+    healthcheck:
+      test: [CMD, wget, -q, --spider, http://127.0.0.1:7690/api/health]
+      interval: 5s
+      timeout: 2s
+      retries: 12
+    restart: unless-stopped
+
+volumes:
+  workbench-state:

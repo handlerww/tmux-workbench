@@ -1,12 +1,19 @@
 <!doctype html>
-<html lang="en" data-theme="system">
+    <html lang="en" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="color-scheme" content="light dark" />
-    <meta name="theme-color" content="#f3f1eb" />
+    <meta name="theme-color" content="#18181b" />
+    <meta name="application-name" content="Workbench" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Workbench" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/icons/tmux-192.png" sizes="192x192" type="image/png" />
+    <link rel="apple-touch-icon" href="/icons/tmux-180.png" />
     <script type="module" src="/src/theme-bootstrap.js"></script>
-    <title>tmux workspace</title>
+    <title>Workbench · tmux sessions</title>
   </head>
   <body>
     <div id="app">
@@ -16,9 +23,12 @@
         </button>
         <div class="mobile-brand-mark" aria-hidden="true"><span></span><span></span><span></span></div>
         <div class="mobile-header-copy">
-          <span class="mobile-header-label">tmux workspace</span>
+          <span class="mobile-header-label">WORKBENCH</span>
           <strong id="mobile-active-name">Sessions</strong>
         </div>
+        <button id="mobile-files-toggle" class="mobile-files-toggle" type="button" aria-controls="files-sidebar" aria-expanded="false" aria-label="Open files" title="Open files">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 6.5h6l2 2h9v10h-17z"/><path d="M3.5 9h17"/></svg>
+        </button>
       </header>
 
       <button id="sidebar-backdrop" class="sidebar-backdrop" type="button" aria-label="Close sessions" tabindex="-1" hidden></button>
@@ -26,8 +36,8 @@
         <div class="brand-row">
           <div class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></div>
           <div>
-            <div class="brand">tmux workspace</div>
-            <div class="brand-subtitle">Local sessions</div>
+            <div class="brand">Workbench</div>
+            <div class="brand-subtitle">Terminal workspace</div>
           </div>
           <button id="theme-button" class="theme-button sidebar-theme-button" type="button" data-theme-setting="system" title="Theme: System" aria-label="Theme: System">
             <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -48,10 +58,13 @@
         </label>
 
         <div class="session-heading">
-          <span>Sessions</span>
+          <span>Workspaces</span>
           <div class="session-heading-actions">
             <button id="create-session-button" class="icon-button" type="button" title="New session" aria-label="Create tmux session" aria-expanded="false">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+            </button>
+            <button id="create-group-button" class="icon-button" type="button" title="New group" aria-label="Create session group">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM12 10v6M9 13h6"/></svg>
             </button>
             <button id="refresh-button" class="icon-button" type="button" title="Refresh" aria-label="Refresh sessions">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6v5h-5M4 18v-5h5M18.7 9A7 7 0 0 0 6.4 6.4L4 9m16 6-2.4 2.6A7 7 0 0 1 5.3 15"/></svg>
@@ -59,21 +72,24 @@
           </div>
         </div>
         <div id="session-list" class="session-list" aria-live="polite"></div>
-        <div class="sidebar-footer">
-          <span class="local-dot"></span>
-          Local only
-        </div>
         <div
           id="sidebar-resizer"
           class="sidebar-resizer"
           role="separator"
-          aria-label="Resize sessions sidebar"
+          aria-label="Resize Workspaces sidebar"
           aria-orientation="vertical"
           tabindex="0"
         ></div>
       </aside>
 
       <main class="workspace">
+        <section class="workspace-center" aria-label="Session workspace">
+        <button id="workspaces-toggle" class="workspaces-toggle" type="button" aria-controls="sidebar" aria-expanded="true" title="Hide workspaces" aria-label="Hide workspaces">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="1"/><path d="M9 4v16"/></svg>
+        </button>
+        <button id="files-toggle" class="files-toggle" type="button" aria-controls="files-sidebar" aria-expanded="true" title="Hide files" aria-label="Hide files">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4zM15 4v16"/></svg>
+        </button>
         <section id="welcome" class="welcome">
           <div class="welcome-art" aria-hidden="true">
             <div class="window window-back"><span></span><span></span></div>
@@ -90,6 +106,21 @@
           </div>
         </section>
         <div id="workspace-layout" class="workspace-layout" hidden></div>
+        </section>
+        <div id="files-resizer" class="files-resizer" role="separator" aria-label="Resize Files sidebar" aria-orientation="vertical" aria-valuemin="200" aria-valuemax="520" aria-valuenow="270" tabindex="0"></div>
+        <aside id="files-sidebar" class="files-sidebar" aria-label="Files, Git and PR">
+          <header class="right-sidebar-header">
+            <div class="right-sidebar-tabs" role="tablist" aria-label="Side panel">
+              <button id="right-files-tab" class="right-sidebar-tab active" type="button" role="tab" aria-selected="true" aria-controls="files-content">Files</button>
+              <button id="right-git-tab" class="right-sidebar-tab" type="button" role="tab" aria-selected="false" aria-controls="git-content">Git</button>
+              <button id="right-pr-tab" class="right-sidebar-tab" type="button" role="tab" aria-selected="false" aria-controls="pr-content">PR</button>
+            </div>
+            <button id="right-sidebar-close" class="right-sidebar-close" type="button" data-close-mobile-files aria-label="Close side panel" title="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+          </header>
+          <div id="files-content" class="right-sidebar-content" role="tabpanel" aria-labelledby="right-files-tab"><div class="files-placeholder"><span class="files-placeholder-icon">⌘</span><strong>Files</strong><small>Open a session to browse its working directory.</small></div></div>
+          <div id="git-content" class="right-sidebar-content" role="tabpanel" aria-labelledby="right-git-tab" hidden></div>
+          <div id="pr-content" class="right-sidebar-content" role="tabpanel" aria-labelledby="right-pr-tab" hidden></div>
+        </aside>
       </main>
     </div>
     <form id="create-session-form" class="create-session-form" hidden>
@@ -104,10 +135,14 @@
       <p id="create-session-hint" class="create-session-hint">Enter a new absolute path or choose one below.</p>
       <section class="create-session-recent" aria-labelledby="recent-session-paths-title">
         <div class="create-session-recent-heading">
-          <strong id="recent-session-paths-title">Recently opened</strong>
-          <span>Last 10 paths</span>
+          <strong id="recent-session-paths-title">Recent and session paths</strong>
         </div>
-        <div id="recent-session-paths" class="create-session-recent-list"></div>
+        <label class="create-session-field" for="create-session-path-search">
+          <span>Search paths</span>
+          <input id="create-session-path-search" type="search" placeholder="Project name or path keywords" autocomplete="off" spellcheck="false" aria-controls="recent-session-paths" />
+        </label>
+        <p class="create-session-hint">Search recent paths and running session directories.</p>
+        <div id="recent-session-paths" class="create-session-recent-list" aria-live="polite"></div>
       </section>
       <div class="create-session-actions">
         <button id="create-session-cancel" type="button">Cancel</button>
@@ -116,5 +151,6 @@
     </form>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
     <script type="module" src="/src/app.js"></script>
+    <script type="module" src="/src/pwa.js"></script>
   </body>
 </html>

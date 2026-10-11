@@ -1,0 +1,52 @@
+.git-diff-tab {
+  --git-diff-border: #e4e4e7;
+  --git-diff-muted: #71717a;
+  --git-diff-fg: #27272a;
+  --git-diff-bg: #fff;
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  color: var(--git-diff-fg);
+  background: var(--git-diff-bg);
+}
+
+.git-diff-tab-toolbar {
+  display: flex;
+  min-height: 52px;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 14px;
+  border-bottom: 1px solid var(--git-diff-border);
+  background: var(--git-diff-bg);
+}
+
+.git-diff-tab-heading { display: grid; min-width: 0; gap: 3px; }
+.git-diff-tab-title { overflow: hidden; font-size: 13px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.git-diff-tab-path { overflow: hidden; color: var(--git-diff-muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.git-diff-tab-actions { display: flex; flex: none; gap: 6px; }
+.git-diff-tab-actions button { min-height: 30px; padding: 5px 9px; border: 1px solid var(--git-diff-border); border-radius: 6px; color: var(--git-diff-fg); background: var(--git-diff-bg); font: inherit; font-size: 11px; cursor: pointer; }
+.git-diff-tab-actions button:hover:not(:disabled) { background: #f4f4f5; }
+.git-diff-tab-actions button:disabled { opacity: .55; cursor: wait; }
+.git-diff-tab-status { min-height: 0; flex: none; padding: 0 14px; color: var(--git-diff-muted); font-size: 11px; line-height: 1.45; }
+.git-diff-tab-status:not(:empty) { padding-top: 7px; padding-bottom: 7px; }
+.git-diff-tab-editor { width: 100%; min-width: 0; min-height: 0; flex: 1; overflow: hidden; }
+.git-diff-tab-editor .monaco-editor, .git-diff-tab-editor .monaco-diff-editor { outline: none; }
+:root[data-color-scheme="dark"] .git-diff-tab { --git-diff-border: #3f3f46; --git-diff-muted: #a1a1aa; --git-diff-fg: #e4e4e7; --git-diff-bg: #121214; }
+:root[data-color-scheme="dark"] .git-diff-tab-toolbar { background: #18181b; }
+:root[data-color-scheme="dark"] .git-diff-tab-actions button { background: #1f1f23; }
+:root[data-color-scheme="dark"] .git-diff-tab-actions button:hover:not(:disabled) { background: #27272a; }
+
+@media (max-width: 600px) {
+  .git-diff-tab-toolbar { min-height: 48px; gap: 7px; padding: 6px 9px; }
+  .git-diff-tab-title { font-size: 12px; }
+  .git-diff-tab-path { font-size: 9px; }
+  .git-diff-tab-actions { gap: 4px; }
+  .git-diff-tab-actions button { min-height: 29px; padding: 4px 6px; font-size: 10px; }
+  .git-diff-tab-status:not(:empty) { padding: 6px 9px; }
+}

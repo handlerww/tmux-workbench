@@ -1,5 +1,10 @@
 .git
-bin
 frontend/node_modules
+bin
+artifacts
+.playwright-cli
+.env
+
+.env.*
+repo
 web/dist
-*.log

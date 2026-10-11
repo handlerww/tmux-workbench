@@ -5,9 +5,12 @@ export function nextNumericSessionName(sessions) {
   }
 }
 
-export function sessionPathOptions(recentPaths, sessions, limit = 10) {
+export function sessionPathOptions(recentPaths, sessions, limit = 10, query = '') {
   const paths = [...recentPaths, ...sessions.map((session) => session.path)];
-  return [...new Set(paths.filter(isAbsolutePath))].slice(0, limit);
+  const keywords = query.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
+  return [...new Set(paths.filter(isAbsolutePath))]
+    .filter((path) => keywords.every((keyword) => path.toLocaleLowerCase().includes(keyword)))
+    .slice(0, limit);
 }
 
 export function addRecentPath(recentPaths, path, limit = 10) {

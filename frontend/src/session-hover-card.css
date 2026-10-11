@@ -1,0 +1,94 @@
+.session-hover-card {
+  --hover-border: #e4e4e7;
+  --hover-muted: #71717a;
+  --hover-field: #fafafa;
+  --hover-field-border: #e4e4e7;
+  position: fixed;
+  z-index: 100;
+  display: grid;
+  gap: 8px;
+  max-height: calc(100vh - 20px);
+  overflow: auto;
+  padding: 10px 12px;
+  border: 1px solid var(--hover-border);
+  border-radius: 12px;
+  color: #27272a;
+  background: #fff;
+  box-shadow: 0 12px 32px #18181b12, 0 4px 12px #18181b0a, 0 1px 3px #18181b0a;
+  font-size: 12px;
+  animation: session-hover-appear 100ms ease-out;
+}
+.session-hover-card[hidden] { display: none; }
+.session-hover-card-header { display: flex; min-width: 0; align-items: center; gap: 7px; }
+.session-hover-card-icon {
+  display: grid;
+  width: 16px;
+  height: 16px;
+  flex: none;
+  place-items: center;
+  color: var(--hover-muted);
+}
+.session-hover-card-icon svg { width: 16px; height: 16px; }
+.session-hover-card-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 550; line-height: 1.5; }
+.session-hover-card-close {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  flex: none;
+  place-items: center;
+  margin-left: auto;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--hover-muted);
+  background: transparent;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color .12s, background .12s;
+}
+.session-hover-card-close:hover { color: inherit; background: var(--hover-field); }
+.session-hover-card-directory { display: flex; min-width: 0; align-items: center; gap: 7px; }
+.session-hover-card-directory-label { display: flex; flex: none; width: 16px; justify-content: center; color: var(--hover-muted); }
+.session-hover-card-directory-label svg { width: 13px; height: 13px; flex: none; }
+.session-hover-card-path { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--hover-muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; line-height: 1.5; }
+.session-hover-card-group-label { display: flex; align-items: center; gap: 12px; margin-top: 1px; padding-top: 8px; border-top: 1px solid var(--hover-border); color: var(--hover-muted); font-size: 11px; font-weight: 500; }
+.session-hover-group-select {
+  flex: 1;
+  min-width: 0;
+  min-height: 28px;
+  padding: 4px 28px 4px 8px;
+  appearance: none;
+  border: 1px solid var(--hover-field-border);
+  border-radius: 8px;
+  color: #3f3f46;
+  background-color: var(--hover-field);
+  background-image: url('data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%2371717a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"%3E%3Cpath d="m8 10 4 4 4-4"/%3E%3C/svg%3E');
+  background-repeat: no-repeat;
+  background-position: right 9px center;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 450;
+  cursor: pointer;
+  transition: border-color .12s, background-color .12s;
+}
+.session-hover-group-select:hover:not(:disabled) { border-color: #a1a1aa; }
+.session-hover-group-select:focus-visible,
+.session-hover-card-close:focus-visible { outline: 2px solid #a1a1aa; outline-offset: 2px; }
+.session-hover-group-select:disabled { opacity: .65; cursor: wait; }
+.session-hover-card-status { min-height: 1em; color: var(--hover-muted); font-size: 11px; }
+.session-hover-card-status:empty { display: none; }
+:root[data-color-scheme="dark"] .session-hover-card {
+  --hover-border: #ffffff12;
+  --hover-muted: #a1a1aa;
+  --hover-field: #ffffff06;
+  --hover-field-border: #ffffff14;
+  color: #f4f4f5;
+  background: #27272a;
+  box-shadow: 0 12px 32px #0005, 0 4px 10px #0003, inset 0 1px 0 #ffffff06;
+}
+:root[data-color-scheme="dark"] .session-hover-group-select { color: #e4e4e7; }
+:root[data-color-scheme="dark"] .session-hover-group-select option { color: #e4e4e7; background: #27272a; }
+@keyframes session-hover-appear { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .session-hover-card { animation: none; } }
+@media (max-width: 760px), (pointer: coarse) { .session-hover-card { display: none !important; } }

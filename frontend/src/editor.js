@@ -1,6 +1,7 @@
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { parseAnsiLines } from './ansi.js';
+import { SessionConnection } from './connection.js';
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -15,8 +16,21 @@ export class SessionEditor {
     this.visible = false;
     this.ended = false;
     this.viewMode = 'reader';
-    this.socket = null;
-    this.connectedSessionName = null;
+    this.readerSubmitInFlight = false;
+    this.readerPasteResults = null;
+    this.connection = new SessionConnection({
+      url: () => {
+        const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const query = new URLSearchParams({ session: this.session.name, cols: String(this.terminal.cols), rows: String(this.terminal.rows) });
+        return `${protocol}//${location.host}/ws?${query}`;
+      },
+      isActive: () => this.visible && !this.ended && !document.hidden,
+      onState: (state, label) => this.setConnection(state, label),
+      onOpen: () => this.sendResize(),
+      onMessage: (event) => {
+        if (event.data instanceof ArrayBuffer) this.terminal.write(decoder.decode(new Uint8Array(event.data), { stream: true }));
+      },
+    });
     this.readerLines = [];
     this.readerAutoFollow = options.getAutoFollow();
     this.captureInFlight = false;
@@ -31,6 +45,9 @@ export class SessionEditor {
     this.panel.className = 'editor-panel';
     this.panel.dataset.tabId = tabId;
     this.panel.innerHTML = editorMarkup();
+    const composerHintId = `composer-hint-${tabId}`;
+    this.panel.querySelector('.composer-hint').id = composerHintId;
+    this.panel.querySelector('.reader-input').setAttribute('aria-describedby', composerHintId);
     this.elements = {
       toolbar: this.panel.querySelector('.editor-toolbar'),
       nameDisplay: this.panel.querySelector('.session-name-display'),
@@ -46,6 +63,7 @@ export class SessionEditor {
       readerMode: this.panel.querySelector('.reader-mode-button'),
       terminalMode: this.panel.querySelector('.terminal-mode-button'),
       readerFollow: this.panel.querySelector('.reader-follow-button'),
+      readerBottom: this.panel.querySelector('.reader-bottom-button'),
       copy: this.panel.querySelector('.copy-button'),
       paste: this.panel.querySelector('.paste-button'),
       reconnect: this.panel.querySelector('.reconnect-button'),
@@ -67,7 +85,7 @@ export class SessionEditor {
       cursorStyle: 'bar',
       cursorInactiveStyle: 'outline',
       fontFamily: '"SFMono-Regular", "Cascadia Code", "Liberation Mono", Menlo, monospace',
-      fontSize: 14,
+      fontSize: 12,
       lineHeight: 1.32,
       letterSpacing: 0,
       scrollback: 20000,
@@ -81,7 +99,7 @@ export class SessionEditor {
     this.bindEvents();
     this.updateSession(session, true);
     this.updateAutoFollow();
-    this.setViewMode('reader', false);
+    this.setViewMode('reader');
 
     this.terminalResizeObserver = new ResizeObserver(() => this.scheduleFit());
     this.terminalResizeObserver.observe(this.elements.terminalShell);
@@ -92,7 +110,13 @@ export class SessionEditor {
 
   bindEvents() {
     this.panel.addEventListener('pointerdown', () => this.options.onFocus(this.tabId));
-    this.terminal.onData((data) => this.sendInput(data));
+    this.terminal.onData((data) => {
+      const result = this.sendInput(data);
+      if (this.readerPasteResults) this.readerPasteResults.push(result);
+      else result.then((sent) => {
+        if (!sent && this.visible && !document.hidden) this.options.onToast('Could not connect. Input was not sent');
+      });
+    });
     this.terminal.onSelectionChange(() => {
       this.elements.copy.disabled = !this.terminal.hasSelection();
     });
@@ -107,6 +131,7 @@ export class SessionEditor {
     this.elements.readerMode.addEventListener('click', () => this.setViewMode('reader'));
     this.elements.terminalMode.addEventListener('click', () => this.setViewMode('terminal'));
     this.elements.readerFollow.addEventListener('click', () => this.options.onAutoFollowChange(!this.readerAutoFollow));
+    this.elements.readerBottom.addEventListener('click', () => this.scrollReaderToBottom());
     this.elements.copy.addEventListener('click', () => this.copySelection());
     this.elements.paste.addEventListener('click', () => this.pasteClipboard());
     this.elements.reconnect.addEventListener('click', () => this.connect(true));
@@ -166,11 +191,10 @@ export class SessionEditor {
     }
   }
 
-  setVisible(visible, focus = false) {
+  setVisible(visible) {
     if (this.visible === visible) {
       if (visible) {
         this.scheduleSize();
-        if (focus) this.focus();
       }
       return;
     }
@@ -185,17 +209,24 @@ export class SessionEditor {
     this.refreshReader(true);
     requestAnimationFrame(() => {
       this.scheduleSize();
-      if (focus) this.focus();
     });
   }
 
-  focus() {
-    if (!this.visible) return;
-    if (this.viewMode === 'reader') this.elements.readerInput.focus();
-    else this.terminal.focus();
+  suspend() {
+    const focused = document.activeElement;
+    if (this.panel.contains(focused) && focused.matches('input, textarea')) focused.blur();
+    this.disconnect();
+    this.stopCapture();
   }
 
-  setViewMode(mode, focus = true) {
+  resume() {
+    if (document.hidden) return;
+    this.connect();
+    this.scheduleSize();
+    this.refreshReader(false);
+  }
+
+  setViewMode(mode) {
     if (mode !== 'reader' && mode !== 'terminal') return;
     this.viewMode = mode;
     const reader = mode === 'reader';
@@ -206,22 +237,20 @@ export class SessionEditor {
     this.elements.readerMode.setAttribute('aria-pressed', String(reader));
     this.elements.terminalMode.setAttribute('aria-pressed', String(!reader));
     this.elements.readerFollow.hidden = !reader;
+    this.elements.readerBottom.hidden = !reader;
     this.elements.copy.hidden = reader;
     this.elements.paste.hidden = reader;
     if (!this.visible) return;
     if (reader) {
-      this.fitReaderTerminal();
-      this.sendResize();
+      if (this.fitReaderTerminal()) this.sendResize();
       this.refreshReader(true);
     } else {
       clearTimeout(this.captureTimer);
       requestAnimationFrame(() => {
         this.fitAddon.fit();
         this.sendResize();
-        if (focus) this.terminal.focus();
       });
     }
-    if (reader && focus) this.elements.readerInput.focus();
   }
 
   updateTheme() {
@@ -231,52 +260,20 @@ export class SessionEditor {
   updateAutoFollow() {
     this.readerAutoFollow = this.options.getAutoFollow();
     this.elements.readerFollow.setAttribute('aria-pressed', String(this.readerAutoFollow));
+    const nextAction = this.readerAutoFollow ? 'Turn auto-follow off' : 'Turn auto-follow on';
+    this.elements.readerFollow.setAttribute('aria-label', nextAction);
+    this.elements.readerFollow.title = nextAction;
     if (this.readerAutoFollow && this.visible) this.scrollReaderToBottom();
   }
 
   connect(force = false) {
     if (!this.visible || this.ended) return;
-    if (!force && this.socket && this.connectedSessionName === this.session.name) return;
-    this.disconnect();
-    this.setConnection('connecting', 'Connecting');
     this.scheduleSize();
-    const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const query = new URLSearchParams({
-      session: this.session.name,
-      cols: String(this.terminal.cols),
-      rows: String(this.terminal.rows),
-    });
-    const currentSocket = new WebSocket(`${protocol}//${location.host}/ws?${query}`);
-    currentSocket.binaryType = 'arraybuffer';
-    this.socket = currentSocket;
-    this.connectedSessionName = this.session.name;
-
-    currentSocket.addEventListener('open', () => {
-      if (this.socket !== currentSocket) return;
-      this.setConnection('connected', 'Live');
-      this.sendResize();
-    });
-    currentSocket.addEventListener('message', (event) => {
-      if (this.socket !== currentSocket || !(event.data instanceof ArrayBuffer)) return;
-      this.terminal.write(decoder.decode(new Uint8Array(event.data), { stream: true }));
-    });
-    currentSocket.addEventListener('close', () => {
-      if (this.socket !== currentSocket) return;
-      this.socket = null;
-      this.connectedSessionName = null;
-      this.setConnection(this.ended ? 'ended' : 'disconnected', this.ended ? 'Ended' : 'Disconnected');
-    });
-    currentSocket.addEventListener('error', () => {
-      if (this.socket === currentSocket) this.setConnection('disconnected', 'Connection failed');
-    });
+    this.connection.connect(force);
   }
 
   disconnect() {
-    if (!this.socket) return;
-    const current = this.socket;
-    this.socket = null;
-    this.connectedSessionName = null;
-    current.close();
+    this.connection.disconnect(true);
   }
 
   async refreshReader(jumpToBottom = false) {
@@ -362,39 +359,63 @@ export class SessionEditor {
     this.captureTimer = setTimeout(() => this.refreshReader(false), delay);
   }
 
-  submitReaderInput() {
-    if (this.socket?.readyState !== WebSocket.OPEN) {
-      this.options.onToast('Not connected');
-      return;
+  async submitReaderInput() {
+    if (this.readerSubmitInFlight) return;
+    this.readerSubmitInFlight = true;
+    const value = this.elements.readerInput.value;
+    const sessionName = this.session.name;
+    try {
+      const connected = await this.connection.ensureConnected();
+      if (!this.visible || this.ended || document.hidden || this.session.name !== sessionName) return;
+      if (!connected) {
+        this.options.onToast('Could not connect. Your message is still in the input');
+        return;
+      }
+      // Keep xterm's paste processing (including bracketed paste) and check
+      // that the text was sent before sending Enter or clearing the draft.
+      const pasteResults = [];
+      const generation = this.connection.generation;
+      this.readerPasteResults = pasteResults;
+      try {
+        this.terminal.paste(value);
+      } finally {
+        this.readerPasteResults = null;
+      }
+      const sent = (await Promise.all(pasteResults)).every(Boolean);
+      if (this.connection.generation !== generation) return;
+      if (!sent) {
+        this.options.onToast('Send failed. Your message is still in the input');
+        return;
+      }
+      if (!await this.sendInput('\r')) {
+        this.options.onToast('Send failed. Your message is still in the input');
+        return;
+      }
+      if (this.elements.readerInput.value === value) this.elements.readerInput.value = '';
+      this.resizeReaderInput();
+      setTimeout(() => this.refreshReader(false), 80);
+    } finally {
+      this.readerSubmitInFlight = false;
     }
-    this.terminal.paste(this.elements.readerInput.value);
-    this.sendInput('\r');
-    this.elements.readerInput.value = '';
-    this.resizeReaderInput();
-    this.elements.readerInput.focus();
-    setTimeout(() => this.refreshReader(false), 80);
   }
 
-  sendReaderKey(key) {
+  async sendReaderKey(key) {
     const values = { escape: '\u001b', interrupt: '\u0003', tab: '\t' };
     if (!values[key]) return;
-    if (!this.sendInput(values[key])) {
-      this.options.onToast('Not connected');
+    if (!await this.sendInput(values[key])) {
+      this.options.onToast('Could not connect. Key was not sent');
       return;
     }
-    this.elements.readerInput.focus();
     setTimeout(() => this.refreshReader(false), 80);
   }
 
   sendInput(data) {
-    if (this.socket?.readyState !== WebSocket.OPEN) return false;
-    this.socket.send(encoder.encode(data));
-    return true;
+    return this.connection.send(encoder.encode(data));
   }
 
   sendResize() {
-    if (this.socket?.readyState !== WebSocket.OPEN) return;
-    this.socket.send(JSON.stringify({ type: 'resize', cols: this.terminal.cols, rows: this.terminal.rows }));
+    if (this.connection.socket?.readyState !== WebSocket.OPEN) return;
+    this.connection.send(JSON.stringify({ type: 'resize', cols: this.terminal.cols, rows: this.terminal.rows }));
   }
 
   scheduleSize() {
@@ -406,20 +427,34 @@ export class SessionEditor {
     if (!this.visible || this.viewMode !== 'reader') return;
     clearTimeout(this.readerResizeTimer);
     this.readerResizeTimer = setTimeout(() => {
-      this.fitReaderTerminal();
-      this.sendResize();
+      if (!this.visible || this.viewMode !== 'reader') return;
+      if (this.fitReaderTerminal()) this.sendResize();
     }, 100);
   }
 
   fitReaderTerminal() {
-    const width = this.elements.readerView.clientWidth || 900;
+    const width = this.elements.readerView.clientWidth;
+    const height = this.elements.readerView.clientHeight;
+    if (!width || !height) return false;
     const contentStyle = getComputedStyle(this.elements.readerContent);
     const horizontalPadding = (Number.parseFloat(contentStyle.paddingLeft) || 0)
       + (Number.parseFloat(contentStyle.paddingRight) || 0);
-    const contentWidth = Math.max(240, width - horizontalPadding);
-    const columns = Math.max(30, Math.min(500, Math.floor(contentWidth / 8.2)));
-    const rows = Math.max(10, Math.min(100, Math.floor((this.elements.readerView.clientHeight || 576) / 18)));
+    const verticalPadding = (Number.parseFloat(contentStyle.paddingTop) || 0)
+      + (Number.parseFloat(contentStyle.paddingBottom) || 0);
+    const fontSize = Number.parseFloat(contentStyle.fontSize) || 12;
+    const font = `${contentStyle.fontStyle} ${contentStyle.fontWeight} ${contentStyle.fontSize} ${contentStyle.fontFamily}`;
+    if (this.readerFont !== font) {
+      const context = document.createElement('canvas').getContext('2d');
+      if (context) context.font = font;
+      this.readerCellWidth = context?.measureText('M'.repeat(32)).width / 32 || fontSize * 0.6;
+      this.readerFont = font;
+    }
+    const cellWidth = this.readerCellWidth + (Number.parseFloat(contentStyle.letterSpacing) || 0);
+    const lineHeight = Number.parseFloat(contentStyle.lineHeight) || fontSize * 1.5;
+    const columns = Math.max(2, Math.min(500, Math.floor(Math.max(0, width - horizontalPadding) / Math.max(1, cellWidth))));
+    const rows = Math.max(1, Math.min(300, Math.floor(Math.max(0, height - verticalPadding) / lineHeight)));
     if (this.terminal.cols !== columns || this.terminal.rows !== rows) this.terminal.resize(columns, rows);
+    return true;
   }
 
   scheduleFit() {
@@ -434,7 +469,8 @@ export class SessionEditor {
 
   resizeReaderInput() {
     this.elements.readerInput.style.height = 'auto';
-    this.elements.readerInput.style.height = `${Math.min(this.elements.readerInput.scrollHeight, 150)}px`;
+    const maxHeight = Number.parseFloat(getComputedStyle(this.elements.readerInput).maxHeight) || 150;
+    this.elements.readerInput.style.height = `${Math.min(this.elements.readerInput.scrollHeight, maxHeight)}px`;
   }
 
   startRename() {
@@ -502,7 +538,6 @@ export class SessionEditor {
   }
 
   async pasteClipboard() {
-    this.terminal.focus();
     try {
       const text = await navigator.clipboard.readText();
       if (text) this.terminal.paste(text);
@@ -515,6 +550,9 @@ export class SessionEditor {
   setConnection(state, label) {
     this.elements.connectionDot.dataset.state = state;
     this.elements.connectionText.textContent = label;
+    const indicator = this.elements.connectionDot.parentElement;
+    indicator.dataset.state = state;
+    indicator.title = `Connection: ${label}`;
   }
 
   stopCapture() {
@@ -581,6 +619,7 @@ function editorMarkup() {
       <div class="session-identity">
         <div class="session-icon" aria-hidden="true">›_</div>
         <div class="session-details">
+          <div class="session-title-row">
           <div class="session-name-display">
             <h1 class="active-name">Session</h1>
             <button class="rename-button" type="button" title="Rename session" aria-label="Rename session">
@@ -592,8 +631,11 @@ function editorMarkup() {
             <button class="rename-save" type="submit">Save</button>
             <button class="rename-cancel" type="button">Cancel</button>
           </form>
-          <div class="active-path"></div>
-          <div class="connection-line"><span class="connection-dot"></span><span class="connection-text">Connecting</span></div>
+          <div class="connection-line" role="status" aria-live="polite" data-state="connecting" title="Connection: Connecting"><span class="connection-dot" aria-hidden="true"></span><span class="connection-text">Connecting</span></div>
+          </div>
+          <div class="session-context">
+            <div class="active-path"></div>
+          </div>
         </div>
       </div>
       <div class="toolbar-actions">
@@ -601,18 +643,20 @@ function editorMarkup() {
           <button class="reader-mode-button" type="button" aria-pressed="true">Reader</button>
           <button class="terminal-mode-button" type="button" aria-pressed="false">Terminal</button>
         </div>
-        <button class="action-button reader-follow-button" type="button" aria-pressed="false" title="Automatically follow new output">
-          <span class="reader-follow-dot" aria-hidden="true"></span><span class="action-label">Auto-follow</span>
+        <button class="action-button reader-follow-button" type="button" aria-pressed="false" aria-label="Turn auto-follow on" title="Turn auto-follow on">
+          <svg class="reader-follow-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h9M5 9h7M5 13h5M16 4v13m-4-4 4 4 4-4M5 20h15"/></svg>
         </button>
-        <button class="action-button copy-button" type="button" disabled hidden title="Copy selection">
+        <button class="action-button reader-bottom-button" type="button" aria-label="Scroll to bottom" title="Scroll to bottom">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v13m-5-5 5 5 5-5M5 21h14"/></svg>
+        </button>
+        <button class="action-button copy-button" type="button" disabled hidden title="Copy selection" aria-label="Copy selection">
           <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg><span class="action-label">Copy</span>
         </button>
-        <button class="action-button paste-button" type="button" hidden title="Paste">
+        <button class="action-button paste-button" type="button" hidden title="Paste" aria-label="Paste">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5h6M9 4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2H9V4Z"/><path d="M16 5h2a2 2 0 0 1 2 2v13H4V7a2 2 0 0 1 2-2h2"/></svg><span class="action-label">Paste</span>
         </button>
-        <button class="action-button quiet reconnect-button" type="button" title="Reconnect">
+        <button class="action-button quiet reconnect-button" type="button" title="Reconnect" aria-label="Reconnect session">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6v5h-5M4 18v-5h5M18.7 9A7 7 0 0 0 6.4 6.4L4 9m16 6-2.4 2.6A7 7 0 0 1 5.3 15"/></svg>
-          <span class="action-label">Reconnect</span>
         </button>
       </div>
     </header>
@@ -622,14 +666,17 @@ function editorMarkup() {
     </div>
     <div class="terminal-shell" hidden><div class="terminal" aria-label="tmux session"></div></div>
     <form class="reader-composer">
-      <div class="reader-shortcuts" aria-label="Keys">
-        <button type="button" data-key="escape">Esc</button>
-        <button type="button" data-key="interrupt">Ctrl C</button>
-        <button type="button" data-key="tab">Tab</button>
-      </div>
       <div class="composer-row">
-        <textarea class="reader-input" rows="1" placeholder="Type a message" aria-label="Session input" spellcheck="true"></textarea>
-        <button class="send-button" type="submit" aria-label="Send">↑</button>
+        <textarea class="reader-input" rows="1" placeholder="Send to session…" aria-label="Session input" spellcheck="true"></textarea>
+        <div class="composer-actions">
+          <div class="reader-shortcuts" role="group" aria-label="Keys">
+            <button type="button" data-key="escape" title="Send Escape">Esc</button>
+            <button type="button" data-key="interrupt" title="Send Ctrl+C">Ctrl C</button>
+            <button type="button" data-key="tab" title="Send Tab">Tab</button>
+          </div>
+          <span class="composer-hint">Enter to send <span aria-hidden="true">·</span> Shift+Enter for newline</span>
+          <button class="send-button" type="submit" aria-label="Send" title="Send (Enter)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6"/></svg></button>
+        </div>
       </div>
     </form>
     <footer class="hint-bar" hidden>

@@ -1,4 +1,10 @@
 /bin/
 /frontend/node_modules/
+/web/dist/
+/artifacts/
+/.playwright-cli/
 *.log
-
+.env
+.env.*
+!.env.example
+/repo/

@@ -20,17 +20,25 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"tmux-webui/internal/terminal"
-	"tmux-webui/internal/tmux"
-	"tmux-webui/internal/websocket"
-	webassets "tmux-webui/web"
+	"workbench/internal/terminal"
+	"workbench/internal/tmux"
+	"workbench/internal/websocket"
+	webassets "workbench/web"
 )
 
 type Server struct {
-	tmux     tmux.Client
-	logger   *slog.Logger
-	static   fs.FS
-	createMu sync.Mutex
+	tmux            tmux.Client
+	logger          *slog.Logger
+	static          fs.FS
+	filesystemRoot  string
+	groupStore      *groupStore
+	gitRunner       string
+	gitAssociations *gitAssociationStore
+	gitPRMu         sync.Mutex
+	gitPRCache      map[string]cachedGitPR
+	gitPRFlights    map[string]*gitPRFlight
+	createMu        sync.Mutex
+	fileWriteMu     sync.Mutex
 }
 
 type resizeMessage struct {
@@ -49,24 +57,79 @@ type createSessionRequest struct {
 }
 
 func New(tmuxBinary string, logger *slog.Logger) http.Handler {
-	static, err := fs.Sub(webassets.Files, "dist")
+	return NewWithFilesystemRoot(tmuxBinary, logger, "")
+}
+
+// NewWithFilesystemRoot serves session files from filesystemRoot when it is
+// configured. This supports host-tmux deployments that expose the host tree
+// read-only at a path such as /host inside the web container.
+func NewWithFilesystemRoot(tmuxBinary string, logger *slog.Logger, filesystemRoot string) http.Handler {
+	handler, err := newHandler(tmuxBinary, logger, filesystemRoot, newMemoryGroupStore(), newMemoryGitAssociationStore(), "")
 	if err != nil {
 		panic(err)
 	}
+	return handler
+}
+
+// NewWithOptions creates a handler with persisted daemon-wide workspace groups.
+// Initialization errors are returned so the executable can fail at startup
+// instead of silently discarding or resetting saved state.
+func NewWithOptions(tmuxBinary string, logger *slog.Logger, filesystemRoot, stateDir string) (http.Handler, error) {
+	return NewWithGitOptions(tmuxBinary, logger, filesystemRoot, stateDir, "")
+}
+
+// NewWithGitOptions adds optional host Git and GitHub CLI execution to the
+// persistent handler. The runner receives the tool name, logical repository
+// path, and arguments as separate arguments.
+func NewWithGitOptions(tmuxBinary string, logger *slog.Logger, filesystemRoot, stateDir, gitRunner string) (http.Handler, error) {
+	store, err := newPersistentGroupStore(stateDir)
+	if err != nil {
+		return nil, err
+	}
+	associations, err := newPersistentGitAssociationStore(stateDir)
+	if err != nil {
+		return nil, err
+	}
+	return newHandler(tmuxBinary, logger, filesystemRoot, store, associations, gitRunner)
+}
+
+func newHandler(tmuxBinary string, logger *slog.Logger, filesystemRoot string, store *groupStore, associations *gitAssociationStore, gitRunner string) (http.Handler, error) {
+	static, err := fs.Sub(webassets.Files, "dist")
+	if err != nil {
+		return nil, err
+	}
 	server := &Server{
-		tmux:   tmux.Client{Binary: tmuxBinary},
-		logger: logger,
-		static: static,
+		tmux:            tmux.Client{Binary: tmuxBinary},
+		logger:          logger,
+		static:          static,
+		filesystemRoot:  filesystemRoot,
+		groupStore:      store,
+		gitRunner:       gitRunner,
+		gitAssociations: associations,
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/health", server.health)
 	mux.HandleFunc("GET /api/sessions", server.sessions)
+	mux.HandleFunc("GET /api/groups", server.groups)
+	mux.HandleFunc("PUT /api/groups", server.groups)
+	mux.HandleFunc("GET /api/git", server.gitStatus)
+	mux.HandleFunc("GET /api/git/pr/changes", server.gitPRChanges)
+	mux.HandleFunc("GET /api/git/pr/diff", server.gitPRDiff)
+	mux.HandleFunc("GET /api/git/recommendations", server.gitRecommendations)
+	mux.HandleFunc("PUT /api/git/association", server.gitAssociation)
+	mux.HandleFunc("GET /api/git/diff", server.gitDiff)
+	mux.HandleFunc("GET /api/files", server.files)
+	mux.HandleFunc("GET /api/file", server.file)
+	mux.HandleFunc("PUT /api/file", server.saveFile)
+	mux.HandleFunc("POST /api/file/create", server.createFile)
+	mux.HandleFunc("POST /api/file/upload", server.uploadFile)
+	mux.HandleFunc("GET /api/file/image", server.fileImage)
 	mux.HandleFunc("POST /api/sessions", server.createSession)
 	mux.HandleFunc("PATCH /api/sessions/rename", server.renameSession)
 	mux.HandleFunc("GET /api/capture", server.capture)
 	mux.HandleFunc("GET /ws", server.connect)
 	mux.HandleFunc("/", server.frontend)
-	return securityHeaders(mux)
+	return securityHeaders(mux), nil
 }
 
 func (s *Server) capture(writer http.ResponseWriter, request *http.Request) {
@@ -425,10 +488,12 @@ func (s *Server) frontend(writer http.ResponseWriter, request *http.Request) {
 		http.NotFound(writer, request)
 		return
 	}
-	if contentType := mime.TypeByExtension(path.Ext(filePath)); contentType != "" {
+	if filePath == "manifest.webmanifest" {
+		writer.Header().Set("Content-Type", "application/manifest+json")
+	} else if contentType := mime.TypeByExtension(path.Ext(filePath)); contentType != "" {
 		writer.Header().Set("Content-Type", contentType)
 	}
-	if filePath == "index.html" {
+	if filePath == "index.html" || filePath == "sw.js" || filePath == "manifest.webmanifest" {
 		writer.Header().Set("Cache-Control", "no-cache")
 	} else if strings.Contains(filePath, "assets/") {
 		writer.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
@@ -482,7 +547,7 @@ func isNormalDisconnect(err error) bool {
 
 func securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		writer.Header().Set("Content-Security-Policy", "default-src 'self'; connect-src 'self' ws: wss:; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self'; base-uri 'none'; frame-ancestors 'none'")
+		writer.Header().Set("Content-Security-Policy", "default-src 'self'; connect-src 'self' ws: wss:; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; worker-src 'self' blob:; font-src 'self' data:; base-uri 'none'; frame-ancestors 'none'")
 		writer.Header().Set("Referrer-Policy", "no-referrer")
 		writer.Header().Set("X-Content-Type-Options", "nosniff")
 		writer.Header().Set("X-Frame-Options", "DENY")

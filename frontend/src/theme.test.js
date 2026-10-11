@@ -50,6 +50,6 @@ test('falls back safely when storage is unavailable', () => {
     setItem: () => { throw new Error('blocked'); },
   };
 
-  assert.equal(readThemeSetting(storage), 'system');
+  assert.equal(readThemeSetting(storage), 'dark');
   assert.equal(storeThemeSetting('dark', storage), 'dark');
 });

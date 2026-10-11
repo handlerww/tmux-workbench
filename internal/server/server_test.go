@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"tmux-webui/internal/tmux"
+	"workbench/internal/tmux"
 )
 
 func TestDimensions(t *testing.T) {
@@ -26,6 +26,36 @@ func TestDimensions(t *testing.T) {
 	columns, rows = dimensions(request.URL.Query())
 	if columns != 120 || rows != 32 {
 		t.Fatalf("got fallback %dx%d", columns, rows)
+	}
+}
+
+func TestPWAAssets(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	handler := New("unused", logger)
+	tests := []struct {
+		path        string
+		contentType string
+		contains    string
+	}{
+		{path: "/manifest.webmanifest", contentType: "application/manifest+json", contains: `"display": "standalone"`},
+		{path: "/sw.js", contentType: "text/javascript", contains: "workbench-shell"},
+		{path: "/icons/tmux-192.png", contentType: "image/png"},
+		{path: "/icons/tmux-512.png", contentType: "image/png"},
+	}
+
+	for _, test := range tests {
+		request := httptest.NewRequest(http.MethodGet, "http://127.0.0.1"+test.path, nil)
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		if response.Code != http.StatusOK {
+			t.Errorf("GET %s status = %d, want 200", test.path, response.Code)
+		}
+		if got := response.Header().Get("Content-Type"); !strings.HasPrefix(got, test.contentType) {
+			t.Errorf("GET %s Content-Type = %q, want prefix %q", test.path, got, test.contentType)
+		}
+		if test.contains != "" && !strings.Contains(response.Body.String(), test.contains) {
+			t.Errorf("GET %s body does not contain %q", test.path, test.contains)
+		}
 	}
 }
 

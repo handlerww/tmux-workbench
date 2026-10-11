@@ -1,0 +1,14 @@
+/* One toggle stays at the main workspace's upper-left corner, including welcome. */
+.workspaces-toggle { position: absolute; z-index: 5; top: 8px; left: 8px; display: grid; width: 28px; height: 26px; place-items: center; padding: 5px; border: 1px solid #e4e4e7; border-radius: 6px; color: #71717a; background: #fff; cursor: pointer; }
+.workspaces-toggle:hover { color: #18181b; background: #f4f4f5; }
+.workspaces-toggle:focus-visible { outline: 2px solid #71717a; outline-offset: 2px; }
+.workspaces-toggle svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.7; }
+.workspaces-collapsed .workspaces-toggle svg { transform: scaleX(-1); }
+:root[data-color-scheme="dark"] .workspaces-toggle { border-color: #3f3f46; color: #a1a1aa; background: #18181b; }
+:root[data-color-scheme="dark"] .workspaces-toggle:hover { color: #fafafa; background: #27272a; }
+@media (min-width: 521px) {
+  .workspaces-collapsed #app { grid-template-columns: minmax(0, 1fr); }
+  .workspaces-collapsed .sidebar { display: none; }
+  .editor-group.with-workspaces-toggle > .editor-tabbar { padding-left: 44px; }
+}
+@media (max-width: 520px) { .workspaces-toggle { display: none; } }

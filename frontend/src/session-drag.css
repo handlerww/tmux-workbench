@@ -1,0 +1,7 @@
+/* Keep invisible drop surfaces available to receive workspace drag entry. */
+.workspace-item-dragging .editor-drop-overlay:not(.is-active) { background: transparent; }
+.editor-drop-overlay:not(.is-active) .editor-drop-preview { display: none; }
+.session-card-row { position: relative; }
+.session-card-row[data-drop-position]::after { position: absolute; z-index: 2; left: 4px; right: 4px; height: 2px; border-radius: 1px; background: #818cf8; pointer-events: none; content: ''; }
+.session-card-row[data-drop-position="before"]::after { top: 0; }
+.session-card-row[data-drop-position="after"]::after { bottom: 0; }

@@ -17,16 +17,17 @@ COPY cmd/ ./cmd/
 COPY internal/ ./internal/
 COPY web/assets.go ./web/assets.go
 COPY --from=frontend /src/web/dist ./web/dist
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/tmux-webui ./cmd/tmux-webui
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/workbench ./cmd/workbench
 
 
 FROM alpine:3.22
 
 RUN apk add --no-cache ca-certificates util-linux
 
-COPY --from=builder /out/tmux-webui /usr/local/bin/tmux-webui
+COPY --from=builder /out/workbench /usr/local/bin/workbench
 COPY host-tmux /usr/local/bin/host-tmux
-RUN chmod 755 /usr/local/bin/host-tmux
+COPY host-git /usr/local/bin/host-git
+RUN chmod 755 /usr/local/bin/host-tmux /usr/local/bin/host-git
 
 ENV HOME=/tmp \
     HOST_UID=0 \
@@ -34,7 +35,7 @@ ENV HOME=/tmp \
     HOST_TMUX_BIN=/usr/bin/tmux
 WORKDIR /tmp
 
-EXPOSE 7681
+EXPOSE 7690
 
-ENTRYPOINT ["/usr/local/bin/tmux-webui"]
-CMD ["--listen=0.0.0.0:7681", "--allow-remote", "--tmux=/usr/local/bin/host-tmux"]
+ENTRYPOINT ["/usr/local/bin/workbench"]
+CMD ["--listen=0.0.0.0:7690", "--allow-remote", "--tmux=/usr/local/bin/host-tmux", "--git-runner=/usr/local/bin/host-git", "--filesystem-root=/host", "--state-dir=/var/lib/workbench"]
